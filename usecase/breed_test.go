@@ -1,43 +1,50 @@
-package usecase
+package routes
 
 import (
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
+	"pet-dex-backend/v2/api/controllers"
+	"pet-dex-backend/v2/api/middlewares"
 
-	"pet-dex-backend/v2/entity"
-	"pet-dex-backend/v2/entity/dto"
-	"pet-dex-backend/v2/pkg/uniqueEntityId"
-	"testing"
+	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
 )
 
-type MockBreedRepository struct {
-	mock.Mock
+type Controllers struct {
+	PetController   *controllers.PetController
+	UserController  *controllers.UserController
+	OngController   *controllers.OngController
+	BreedController *controllers.BreedController
 }
 
-func (m *MockBreedRepository) FindByID(ID uniqueEntityId.ID) (*entity.Breed, error) {
-	args := m.Called(ID)
-	return args.Get(0).(*entity.Breed), args.Error(1)
-}
+func InitRoutes(controllers Controllers, c *chi.Mux) {
 
-func (m *MockBreedRepository) List() ([]*dto.BreedList, error) {
-	args := m.Called()
-	return args.Get(0).([]*dto.BreedList), args.Error(1)
-}
+	c.Route("/api", func(r chi.Router) {
+		r.Use(middleware.AllowContentType("application/json"))
 
-func TestBreedFindByID(t *testing.T) {
-	ID := uniqueEntityId.NewID()
+			})
 
-	expectedBreed := &entity.Breed{ID: ID, Name: "Pastor Alemão", Specie: "Dog"}
+			private.Route("/ongs", func(r chi.Router) {
+				r.Post("/", controllers.OngController.Insert)
+				r.Get("/", controllers.OngController.List)
+				r.Get("/{ongID}", controllers.OngController.FindByID)
+				r.Patch("/{ongID}", controllers.OngController.Update)
+			})
 
-	mockRepo := new(MockBreedRepository)
-	defer mockRepo.AssertExpectations(t)
+			private.Route("/user", func(r chi.Router) {
+				r.Get("/{id}/my-pets", controllers.PetController.ListUserPets)
+				r.Patch("/{id}", controllers.UserController.Update)
+				r.Get("/{id}", controllers.UserController.FindByID)
+				r.Delete("/{id}", controllers.UserController.Delete)
+			})
+			private.Route("/settings", func(r chi.Router) {
+				r.Patch("/push-notifications", controllers.UserController.UpdatePushNotificationSettings)
+			})
+		})
 
-	mockRepo.On("FindByID", ID).Return(expectedBreed, nil)
-	usecase := NewBreedUseCase(mockRepo)
+		r.Group(func(public chi.Router) {
+			public.Post("/user", controllers.UserController.Insert)
+			public.Post("/user/token", controllers.UserController.GenerateToken)
+			public.Get("/pets/", controllers.PetController.ListAllPets)
+		})
 
-	resultPet, err := usecase.FindByID(ID)
-
-	assert.NoError(t, err)
-	assert.NotNil(t, resultPet)
-	assert.Equal(t, expectedBreed, resultPet)
+	})
 }
