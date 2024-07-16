@@ -1,29 +1,36 @@
 package entity
 
 import (
+	"pet-dex-backend/v2/entity/dto"
 	"pet-dex-backend/v2/pkg/uniqueEntityId"
 	"time"
 )
 
 type User struct {
-	ID        uniqueEntityId.ID `json:"id" db:"id"`
-	Name      string            `json:"name" db:"name"`
-	Type      string            `json:"type" db:"type"`
-	Document  string            `json:"document" db:"document"`
-	AvatarURL string            `json:"avatar_url" db:"avatarUrl"`
-	Email     string            `json:"email" db:"email"`
-	Phone     string            `json:"phone" db:"phone"`
-	Pass      string            `json:"pass" db:"pass"`
-	BirthDate *time.Time        `json:"birthdate"`
-	CreatedAt *time.Time        `json:"createdAt" db:"created_at"`
-	UpdatedAt *time.Time        `json:"updatedAt" db:"updated_at"`
-	Adresses  Address         `json:"addresses"`
+	ID                       uniqueEntityId.ID `json:"id" db:"id"`
+	Name                     string            `json:"name" db:"name"`
+	Type                     string            `json:"type" db:"type"`
+	Document                 string            `json:"document" db:"document"`
+	AvatarURL                string            `json:"avatar_url" db:"avatarUrl"`
+	Email                    string            `json:"email" db:"email"`
+	Phone                    string            `json:"phone" db:"phone"`
+	Pass                     string            `json:"pass" db:"pass"`
+	BirthDate                *time.Time        `json:"birthdate"`
+	PushNotificationsEnabled *bool             `json:"pushNotificationsEnabled" db:"pushNotificationsEnabled"`
+	CreatedAt                *time.Time        `json:"createdAt" db:"created_at"`
+	UpdatedAt                *time.Time        `json:"updatedAt" db:"updated_at"`
+	Adresses                 Address           `json:"addresses"`
 }
 
 func NewUser(name, uType, document, avatar_url, email, phone, pass, city, state string, birthdate *time.Time) *User {
 	userId := uniqueEntityId.NewID()
 
-	address := NewAddress(userId, city, state)
+	var addressDto dto.AddressInsertDto
+	addressDto.UserId = userId
+	addressDto.City = city
+	addressDto.State = state
+
+	address := NewAddress(addressDto)
 
 	return &User{
 		ID:        userId,
@@ -35,26 +42,23 @@ func NewUser(name, uType, document, avatar_url, email, phone, pass, city, state 
 		Phone:     phone,
 		Pass:      pass,
 		BirthDate: birthdate,
-		Adresses:  address,
+		Adresses:  *address,
 	}
 }
 
-func NewAddress(userId uniqueEntityId.ID, city, state string) Address {
-	return Address{
-		ID:      uniqueEntityId.NewID(),
-		UserId:  userId,
-		Address: "",
-		City:    city,
-		State:   state,
+func UserToUpdate(dtoUpdate *dto.UserUpdateDto) User {
+	user := User{
+		Name:      dtoUpdate.Name,
+		Document:  dtoUpdate.Document,
+		AvatarURL: dtoUpdate.AvatarURL,
+		Email:     dtoUpdate.Email,
+		Phone:     dtoUpdate.Phone,
+		BirthDate: dtoUpdate.BirthDate,
 	}
-}
 
-type Address struct {
-	ID        uniqueEntityId.ID `json:"id" db:"id"`
-	UserId    uniqueEntityId.ID `json:"userId" db:"userId"`
-	Address   string            `json:"address" db:"address"`
-	City      string            `json:"city" db:"city"`
-	State     string            `json:"state" db:"state"`
-	Latitude  float64           `json:"latitude" db:"latitude"`
-	Logintute float64           `json:"longitute" db:"longitute"`
+	if dtoUpdate.BirthDate == nil {
+		user.BirthDate = nil
+	}
+
+	return user
 }

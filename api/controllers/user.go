@@ -1,47 +1,50 @@
-package controllers
+package routes
 
 import (
-	"encoding/json"
-	"fmt"
-	"net/http"
-	"pet-dex-backend/v2/entity/dto"
-	"pet-dex-backend/v2/usecase"
+	"pet-dex-backend/v2/api/controllers"
+	"pet-dex-backend/v2/api/middlewares"
+
+	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
 )
 
-type UserController struct {
-	uusecase *usecase.UserUsecase
+type Controllers struct {
+	PetController   *controllers.PetController
+	UserController  *controllers.UserController
+	OngController   *controllers.OngController
+	BreedController *controllers.BreedController
 }
 
-func NewUserController(uusecase *usecase.UserUsecase) *UserController {
-	return &UserController{
-		uusecase: uusecase,
-	}
-}
+func InitRoutes(controllers Controllers, c *chi.Mux) {
 
-func (uc *UserController) Insert(w http.ResponseWriter, r *http.Request) {
-	var userDto dto.UserInsertDto
-	err := json.NewDecoder(r.Body).Decode(&userDto)
+	c.Route("/api", func(r chi.Router) {
+		r.Use(middleware.AllowContentType("application/json"))
 
-	if err != nil {
-		fmt.Println(fmt.Errorf("#UserController.Insert error: %w", err))
-		http.Error(w, "Erro ao converter requisição ", http.StatusBadRequest)
-		return
-	}
+			})
 
-	err = userDto.Validate()
+			private.Route("/ongs", func(r chi.Router) {
+				r.Post("/", controllers.OngController.Insert)
+				r.Get("/", controllers.OngController.List)
+				r.Get("/{ongID}", controllers.OngController.FindByID)
+				r.Patch("/{ongID}", controllers.OngController.Update)
+			})
 
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
+			private.Route("/user", func(r chi.Router) {
+				r.Get("/{id}/my-pets", controllers.PetController.ListUserPets)
+				r.Patch("/{id}", controllers.UserController.Update)
+				r.Get("/{id}", controllers.UserController.FindByID)
+				r.Delete("/{id}", controllers.UserController.Delete)
+			})
+			private.Route("/settings", func(r chi.Router) {
+				r.Patch("/push-notifications", controllers.UserController.UpdatePushNotificationSettings)
+			})
+		})
 
-	err = uc.uusecase.Save(userDto)
+		r.Group(func(public chi.Router) {
+			public.Post("/user", controllers.UserController.Insert)
+			public.Post("/user/token", controllers.UserController.GenerateToken)
+			public.Get("/pets/", controllers.PetController.ListAllPets)
+		})
 
-	if err != nil {
-		fmt.Println(fmt.Errorf("#UserController.Save error: %w", err))
-		http.Error(w, "Erro ao salvar usuario", http.StatusInternalServerError)
-		return
-	}
-
-	w.WriteHeader(http.StatusCreated)
+	})
 }

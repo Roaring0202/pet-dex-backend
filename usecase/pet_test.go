@@ -1,191 +1,50 @@
-package usecase
+package routes
 
 import (
-	"errors"
+	"pet-dex-backend/v2/api/controllers"
+	"pet-dex-backend/v2/api/middlewares"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
-
-	"pet-dex-backend/v2/entity"
-	"pet-dex-backend/v2/pkg/uniqueEntityId"
-	"testing"
+	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
 )
 
-type MockPetRepository struct {
-	mock.Mock
+type Controllers struct {
+	PetController   *controllers.PetController
+	UserController  *controllers.UserController
+	OngController   *controllers.OngController
+	BreedController *controllers.BreedController
 }
 
-func (m *MockPetRepository) Save(entity.Pet) error {
-	return nil
-}
+func InitRoutes(controllers Controllers, c *chi.Mux) {
 
-func (m *MockPetRepository) FindByID(ID uniqueEntityId.ID) (*entity.Pet, error) {
-	args := m.Called(ID)
-	return args.Get(0).(*entity.Pet), args.Error(1)
-}
+	c.Route("/api", func(r chi.Router) {
+		r.Use(middleware.AllowContentType("application/json"))
 
-func (m *MockPetRepository) Update(petID string, userID string, updateValues map[string]interface{}) error {
-	args := m.Called(petID, userID, updateValues)
-	return args.Error(0)
-}
+			})
 
-func (m *MockPetRepository) ListByUser(userID uniqueEntityId.ID) ([]*entity.Pet, error) {
-	args := m.Called(userID)
-	return args.Get(0).([]*entity.Pet), args.Error(1)
-}
+			private.Route("/ongs", func(r chi.Router) {
+				r.Post("/", controllers.OngController.Insert)
+				r.Get("/", controllers.OngController.List)
+				r.Get("/{ongID}", controllers.OngController.FindByID)
+				r.Patch("/{ongID}", controllers.OngController.Update)
+			})
 
-func TestUpdateUseCaseDo(t *testing.T) {
-	id := "123"
-	userID := uniqueEntityId.NewID()
-	petToUpdate := &entity.Pet{Size: "medium", UserID: userID}
-	mockRepo := new(MockPetRepository)
-	//mockRepo.On("FindById", id).Return(&entity.Pet{ID: "123", UserID: "321"}, nil)
-	mockRepo.On("Update", id, userID.String(), map[string]interface{}{"size": &petToUpdate.Size}).Return(nil)
-	usecase := NewPetUseCase(mockRepo)
+			private.Route("/user", func(r chi.Router) {
+				r.Get("/{id}/my-pets", controllers.PetController.ListUserPets)
+				r.Patch("/{id}", controllers.UserController.Update)
+				r.Get("/{id}", controllers.UserController.FindByID)
+				r.Delete("/{id}", controllers.UserController.Delete)
+			})
+			private.Route("/settings", func(r chi.Router) {
+				r.Patch("/push-notifications", controllers.UserController.UpdatePushNotificationSettings)
+			})
+		})
 
-	err := usecase.Update(id, userID.String(), petToUpdate)
+		r.Group(func(public chi.Router) {
+			public.Post("/user", controllers.UserController.Insert)
+			public.Post("/user/token", controllers.UserController.GenerateToken)
+			public.Get("/pets/", controllers.PetController.ListAllPets)
+		})
 
-	assert.NoError(t, err)
-	mockRepo.AssertExpectations(t)
-}
-
-func TestUseCaseDoInvalidSize(t *testing.T) {
-	id := "123"
-	userID := uniqueEntityId.NewID()
-	petToUpdate := &entity.Pet{Size: "Invalid Size"}
-	mockRepo := new(MockPetRepository)
-	//mockRepo.On("FindById", id).Return(&entity.Pet{ID: "123", UserID: "321"}, nil)
-	mockRepo.On("Update", id, userID.String(), map[string]interface{}{"size": &petToUpdate.Size}).Return(nil)
-	usecase := NewPetUseCase(mockRepo)
-
-	err := usecase.Update(id, userID.String(), petToUpdate)
-
-	assert.EqualError(t, err, "the animal size is invalid")
-	mockRepo.AssertNotCalled(t, "Update")
-}
-
-func TestUpdateUseCaseDoRepositoryError(t *testing.T) {
-	id := "123"
-	userID := "321"
-	petToUpdate := &entity.Pet{Size: "small"}
-	repoError := errors.New("error updating pet")
-	mockRepo := new(MockPetRepository)
-	mockRepo.On("Update", id, userID, mock.Anything).Return(repoError)
-	usecase := NewPetUseCase(mockRepo)
-
-	err := usecase.Update(id, userID, petToUpdate)
-
-	assert.EqualError(t, err, "failed to update size for pet with ID 123: error updating pet")
-	mockRepo.AssertExpectations(t)
-}
-func TestUpdateUseCaseisValidSize(t *testing.T) {
-	usecase := PetUseCase{}
-
-	assert.True(t, usecase.isValidPetSize(&entity.Pet{Size: "small"}))
-	assert.True(t, usecase.isValidPetSize(&entity.Pet{Size: "medium"}))
-	assert.True(t, usecase.isValidPetSize(&entity.Pet{Size: "large"}))
-	assert.True(t, usecase.isValidPetSize(&entity.Pet{Size: "giant"}))
-	assert.False(t, usecase.isValidPetSize(&entity.Pet{Size: "Invalid Size"}))
-	assert.False(t, usecase.isValidPetSize(&entity.Pet{Size: ""}))
-}
-
-func TestListUserPets(t *testing.T) {
-	userID := uniqueEntityId.NewID()
-	expectedPets := []*entity.Pet{
-		{ID: uniqueEntityId.NewID(), UserID: userID, Name: "Rex", AvailableToAdoption: true},
-		{ID: uniqueEntityId.NewID(), UserID: userID, Name: "Thor", AvailableToAdoption: true},
-	}
-
-	mockRepo := new(MockPetRepository)
-	defer mockRepo.AssertExpectations(t)
-
-	mockRepo.On("ListByUser", userID).Return(expectedPets, nil)
-	usecase := NewPetUseCase(mockRepo)
-
-	pets, err := usecase.ListUserPets(userID)
-
-	assert.NoError(t, err)
-	assert.Len(t, pets, 2)
-}
-
-func TestListUserPetsNoPetsFound(t *testing.T) {
-	userID := uniqueEntityId.NewID()
-
-	mockRepo := new(MockPetRepository)
-	defer mockRepo.AssertExpectations(t)
-
-	mockRepo.On("ListByUser", userID).Return([]*entity.Pet{}, nil)
-	usecase := NewPetUseCase(mockRepo)
-
-	pets, err := usecase.ListUserPets(userID)
-
-	assert.NoError(t, err)
-	assert.Len(t, pets, 0)
-}
-
-func TestListUserPetsErrorOnRepo(t *testing.T) {
-	userID := uniqueEntityId.NewID()
-
-	mockRepo := new(MockPetRepository)
-	defer mockRepo.AssertExpectations(t)
-
-	mockRepo.On("ListByUser", userID).Return([]*entity.Pet{}, errors.New("this is a repository error"))
-	usecase := NewPetUseCase(mockRepo)
-
-	pets, err := usecase.ListUserPets(userID)
-
-	assert.Error(t, err)
-	assert.Nil(t, pets)
-	assert.EqualError(t, err, "failed to retrieve all user pets: this is a repository error")
-}
-
-func TestFindByID(t *testing.T) {
-	ID := uniqueEntityId.NewID()
-	expectedPet := &entity.Pet{ID: ID, UserID: uniqueEntityId.NewID(), Name: "Rex", AvailableToAdoption: true}
-
-	mockRepo := new(MockPetRepository)
-	defer mockRepo.AssertExpectations(t)
-
-	mockRepo.On("FindByID", ID).Return(expectedPet, nil)
-	usecase := NewPetUseCase(mockRepo)
-
-	resultPet, err := usecase.FindByID(ID)
-
-	assert.NoError(t, err)
-	assert.NotNil(t, resultPet)
-	assert.Equal(t, expectedPet, resultPet)
-}
-
-func TestFindByIDNilResult(t *testing.T) {
-	petID := uniqueEntityId.NewID()
-	var pet *entity.Pet
-
-	mockRepo := new(MockPetRepository)
-	defer mockRepo.AssertExpectations(t)
-
-	mockRepo.On("FindByID", petID).Return(pet, errors.New("sql: no rows in result set"))
-	usecase := NewPetUseCase(mockRepo)
-
-	resultPet, err := usecase.FindByID(petID)
-
-	assert.Error(t, err)
-	assert.Nil(t, resultPet)
-	assert.EqualError(t, err, "failed to retrieve pet: sql: no rows in result set")
-}
-
-func TestFindByIDErrorOnRepo(t *testing.T) {
-	petID := uniqueEntityId.NewID()
-	var pet *entity.Pet
-
-	mockRepo := new(MockPetRepository)
-	defer mockRepo.AssertExpectations(t)
-
-	mockRepo.On("FindByID", petID).Return(pet, errors.New("this is a repository error"))
-	usecase := NewPetUseCase(mockRepo)
-
-	resultPet, err := usecase.FindByID(petID)
-
-	assert.Error(t, err)
-	assert.Nil(t, resultPet)
-	assert.EqualError(t, err, "failed to retrieve pet: this is a repository error")
+	})
 }
