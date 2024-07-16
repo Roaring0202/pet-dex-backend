@@ -20,16 +20,6 @@ func InitRoutes(controllers Controllers, c *chi.Mux) {
 	c.Route("/api", func(r chi.Router) {
 		r.Use(middleware.AllowContentType("application/json"))
 
-		r.Group(func(private chi.Router) {
-			private.Use(middlewares.AuthMiddleware)
-
-			private.Route("/pets", func(r chi.Router) {
-				r.Route("/breeds", func(r chi.Router) {
-					r.Get("/", controllers.BreedController.List)
-				})
-
-				r.Patch("/{petID}", controllers.PetController.Update)
-				r.Post("/", controllers.PetController.CreatePet)
 			})
 
 			private.Route("/ongs", func(r chi.Router) {
