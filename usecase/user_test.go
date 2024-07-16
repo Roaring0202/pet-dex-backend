@@ -1,261 +1,50 @@
-package usecase
+package routes
 
 import (
-	"fmt"
-	"pet-dex-backend/v2/entity/dto"
-	"pet-dex-backend/v2/interfaces"
-	mockInterfaces "pet-dex-backend/v2/mocks/pet-dex-backend/v2/interfaces"
-	"pet-dex-backend/v2/pkg/uniqueEntityId"
-	"testing"
-	"time"
+	"pet-dex-backend/v2/api/controllers"
+	"pet-dex-backend/v2/api/middlewares"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
+	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
 )
 
-func TestNewUserUseCase(t *testing.T) {
-	tcases := map[string]struct {
-		repo         interfaces.UserRepository
-		hasher       interfaces.Hasher
-		expectOutput *UserUsecase
-		encoder      interfaces.Encoder
-	}{
-		"success": {
-			repo:         mockInterfaces.NewMockUserRepository(t),
-			hasher:       mockInterfaces.NewMockHasher(t),
-			expectOutput: &UserUsecase{},
-		},
-	}
-
-	for name, tcase := range tcases {
-		t.Run(name, func(t *testing.T) {
-			usecase := NewUserUsecase(tcase.repo, tcase.hasher, tcase.encoder)
-
-			assert.IsTypef(t, tcase.expectOutput, usecase, "error: New Hasher not returns a *Hasher{} struct", nil)
-		})
-	}
+type Controllers struct {
+	PetController   *controllers.PetController
+	UserController  *controllers.UserController
+	OngController   *controllers.OngController
+	BreedController *controllers.BreedController
 }
 
-func TestSave(t *testing.T) {
-	tcases := map[string]struct {
-		repo         *mockInterfaces.MockUserRepository
-		hasher       *mockInterfaces.MockHasher
-		input        dto.UserInsertDto
-		encoder      interfaces.Encoder
-		expectOutput error
-	}{
-		"success": {
-			repo:   mockInterfaces.NewMockUserRepository(t),
-			hasher: mockInterfaces.NewMockHasher(t),
-			input: dto.UserInsertDto{
-				Name:      "teste",
-				Type:      "teste",
-				Document:  "teste",
-				AvatarURL: "teste",
-				Email:     "teste",
-				Phone:     "teste",
-				Pass:      "hashedPass",
-				BirthDate: &time.Time{},
-				City:      "teste",
-				State:     "teste",
-			},
-			expectOutput: nil,
-		},
-	}
+func InitRoutes(controllers Controllers, c *chi.Mux) {
 
-	for name, tcase := range tcases {
-		t.Run(name, func(t *testing.T) {
-			tcase.hasher.On("Hash", tcase.input.Pass).Return("hashedPass", tcase.expectOutput)
-			tcase.repo.On("Save", mock.Anything).Return(tcase.expectOutput)
-			tcase.repo.On("SaveAddress", mock.Anything).Return(tcase.expectOutput)
+	c.Route("/api", func(r chi.Router) {
+		r.Use(middleware.AllowContentType("application/json"))
 
-			usecase := NewUserUsecase(tcase.repo, tcase.hasher, tcase.encoder)
-			err := usecase.Save(tcase.input)
+			})
 
-			assert.Equal(t, tcase.expectOutput, err, "expected error mismatch")
+			private.Route("/ongs", func(r chi.Router) {
+				r.Post("/", controllers.OngController.Insert)
+				r.Get("/", controllers.OngController.List)
+				r.Get("/{ongID}", controllers.OngController.FindByID)
+				r.Patch("/{ongID}", controllers.OngController.Update)
+			})
+
+			private.Route("/user", func(r chi.Router) {
+				r.Get("/{id}/my-pets", controllers.PetController.ListUserPets)
+				r.Patch("/{id}", controllers.UserController.Update)
+				r.Get("/{id}", controllers.UserController.FindByID)
+				r.Delete("/{id}", controllers.UserController.Delete)
+			})
+			private.Route("/settings", func(r chi.Router) {
+				r.Patch("/push-notifications", controllers.UserController.UpdatePushNotificationSettings)
+			})
 		})
-	}
-}
 
-func TestErrorSave(t *testing.T) {
-	tcases := map[string]struct {
-		repo         *mockInterfaces.MockUserRepository
-		hasher       *mockInterfaces.MockHasher
-		input        dto.UserInsertDto
-		encoder      interfaces.Encoder
-		expectOutput error
-	}{
-		"errorSave": {
-			repo:   mockInterfaces.NewMockUserRepository(t),
-			hasher: mockInterfaces.NewMockHasher(t),
-			input: dto.UserInsertDto{
-				Name:      "teste",
-				Type:      "teste",
-				Document:  "teste",
-				AvatarURL: "teste",
-				Email:     "teste",
-				Phone:     "teste",
-				Pass:      "hashedPass",
-				BirthDate: &time.Time{},
-				City:      "teste",
-				State:     "teste",
-			},
-			expectOutput: fmt.Errorf("error on save"),
-		},
-	}
-
-	for name, tcase := range tcases {
-		t.Run(name, func(t *testing.T) {
-			tcase.hasher.On("Hash", tcase.input.Pass).Return("hashedPass", nil)
-			tcase.repo.On("Save", mock.Anything).Return(tcase.expectOutput)
-
-			usecase := NewUserUsecase(tcase.repo, tcase.hasher, tcase.encoder)
-			err := usecase.Save(tcase.input)
-
-			assert.Equal(t, tcase.expectOutput, err, "expected error mismatch")
+		r.Group(func(public chi.Router) {
+			public.Post("/user", controllers.UserController.Insert)
+			public.Post("/user/token", controllers.UserController.GenerateToken)
+			public.Get("/pets/", controllers.PetController.ListAllPets)
 		})
-	}
-}
 
-func TestErrorHash(t *testing.T) {
-	tcases := map[string]struct {
-		repo         *mockInterfaces.MockUserRepository
-		hasher       *mockInterfaces.MockHasher
-		input        dto.UserInsertDto
-		encoder      interfaces.Encoder
-		expectOutput error
-	}{
-		"errorHash": {
-			repo:   mockInterfaces.NewMockUserRepository(t),
-			hasher: mockInterfaces.NewMockHasher(t),
-			input: dto.UserInsertDto{
-				Name:      "teste",
-				Type:      "teste",
-				Document:  "teste",
-				AvatarURL: "teste",
-				Email:     "teste",
-				Phone:     "teste",
-				Pass:      "hashedPass",
-				BirthDate: &time.Time{},
-				City:      "teste",
-				State:     "teste",
-			},
-			expectOutput: fmt.Errorf("error on hash"),
-		},
-	}
-
-	for name, tcase := range tcases {
-		t.Run(name, func(t *testing.T) {
-			tcase.hasher.On("Hash", tcase.input.Pass).Return("hashedPass", tcase.expectOutput)
-
-			usecase := NewUserUsecase(tcase.repo, tcase.hasher, tcase.encoder)
-			err := usecase.Save(tcase.input)
-
-			assert.Equal(t, tcase.expectOutput, err, "expected error mismatch")
-		})
-	}
-}
-
-func TestErrorSaveAddress(t *testing.T) {
-	tcases := map[string]struct {
-		repo         *mockInterfaces.MockUserRepository
-		hasher       *mockInterfaces.MockHasher
-		input        dto.UserInsertDto
-		encoder      interfaces.Encoder
-		expectOutput error
-	}{
-		"errorSaveAddress": {
-			repo:   mockInterfaces.NewMockUserRepository(t),
-			hasher: mockInterfaces.NewMockHasher(t),
-			input: dto.UserInsertDto{
-				Name:      "teste",
-				Type:      "teste",
-				Document:  "teste",
-				AvatarURL: "teste",
-				Email:     "teste",
-				Phone:     "teste",
-				Pass:      "hashedPass",
-				BirthDate: &time.Time{},
-				City:      "teste",
-				State:     "teste",
-			},
-			expectOutput: fmt.Errorf("error on save addresse"),
-		},
-	}
-
-	for name, tcase := range tcases {
-		t.Run(name, func(t *testing.T) {
-			tcase.hasher.On("Hash", tcase.input.Pass).Return("hashedPass", nil)
-			tcase.repo.On("Save", mock.Anything).Return(nil)
-			tcase.repo.On("SaveAddress", mock.Anything).Return(tcase.expectOutput)
-
-			usecase := NewUserUsecase(tcase.repo, tcase.hasher, tcase.encoder)
-			err := usecase.Save(tcase.input)
-
-			assert.Equal(t, tcase.expectOutput, err, "expected error mismatch")
-		})
-	}
-}
-
-func TestUpdate(t *testing.T) {
-	tcases := map[string]struct {
-		repo         *mockInterfaces.MockUserRepository
-		hasher       *mockInterfaces.MockHasher
-		inputID      uniqueEntityId.ID
-		inputDto     dto.UserUpdateDto
-		encoder      interfaces.Encoder
-		expectOutput error
-	}{
-		"success": {
-			repo:    mockInterfaces.NewMockUserRepository(t),
-			hasher:  mockInterfaces.NewMockHasher(t),
-			inputID: uniqueEntityId.NewID(),
-			inputDto: dto.UserUpdateDto{
-				Name: "teste",
-			},
-			expectOutput: nil,
-		},
-	}
-
-	for name, tcase := range tcases {
-		t.Run(name, func(t *testing.T) {
-			tcase.repo.On("Update", mock.Anything, mock.Anything).Return(tcase.expectOutput)
-			usecase := NewUserUsecase(tcase.repo, tcase.hasher, tcase.encoder)
-			err := usecase.Update(tcase.inputID, tcase.inputDto)
-
-			assert.Equal(t, tcase.expectOutput, err, "expected error mismatch")
-		})
-	}
-}
-
-func TestErrorUpdate(t *testing.T) {
-	tcases := map[string]struct {
-		repo         *mockInterfaces.MockUserRepository
-		hasher       *mockInterfaces.MockHasher
-		inputID      uniqueEntityId.ID
-		inputDto     dto.UserUpdateDto
-		encoder      interfaces.Encoder
-		expectOutput error
-	}{
-		"errorSave": {
-			repo:    mockInterfaces.NewMockUserRepository(t),
-			hasher:  mockInterfaces.NewMockHasher(t),
-			inputID: uniqueEntityId.NewID(),
-			inputDto: dto.UserUpdateDto{
-				Name: "teste",
-			},
-			expectOutput: fmt.Errorf("error on update user"),
-		},
-	}
-
-	for name, tcase := range tcases {
-		t.Run(name, func(t *testing.T) {
-			tcase.repo.On("Update", mock.Anything, mock.Anything).Return(tcase.expectOutput)
-
-			usecase := NewUserUsecase(tcase.repo, tcase.hasher, tcase.encoder)
-			err := usecase.Update(tcase.inputID, tcase.inputDto)
-
-			assert.Equal(t, tcase.expectOutput, err, "expected error mismatch")
-		})
-	}
+	})
 }

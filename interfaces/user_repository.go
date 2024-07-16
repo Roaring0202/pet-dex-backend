@@ -9,12 +9,9 @@ type UserRepository interface {
 	Save(user *entity.User) error
 	Update(userID uniqueEntityId.ID, user entity.User) error
 	Delete(id uniqueEntityId.ID) error
-	FindById(id uniqueEntityId.ID) *entity.User
-	FindByEmail(email string) *entity.User
+	FindByID(ID uniqueEntityId.ID) (*entity.User, error)
+	FindByEmail(email string) (*entity.User, error)
 	List() ([]entity.User, error)
+	ChangePassword(userId uniqueEntityId.ID, newPassword string) error
 	AdressRepo
-}
-
-type AdressRepo interface {
-	SaveAddress(addr *entity.Address) error
 }

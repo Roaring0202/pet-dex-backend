@@ -1,92 +1,50 @@
-package usecase
+package routes
 
 import (
-	"errors"
-	"fmt"
-	"pet-dex-backend/v2/entity"
-	"pet-dex-backend/v2/entity/dto"
-	"pet-dex-backend/v2/infra/config"
-	"pet-dex-backend/v2/interfaces"
-	"pet-dex-backend/v2/pkg/uniqueEntityId"
-	"time"
+	"pet-dex-backend/v2/api/controllers"
+	"pet-dex-backend/v2/api/middlewares"
 
-	"github.com/golang-jwt/jwt"
+	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
 )
 
-var logger = config.GetLogger("user-usercase")
-
-type UserUsecase struct {
-	repo    interfaces.UserRepository
-	hasher  interfaces.Hasher
-	encoder interfaces.Encoder
+type Controllers struct {
+	PetController   *controllers.PetController
+	UserController  *controllers.UserController
+	OngController   *controllers.OngController
+	BreedController *controllers.BreedController
 }
 
-func NewUserUsecase(repo interfaces.UserRepository, hasher interfaces.Hasher, encoder interfaces.Encoder) *UserUsecase {
-	return &UserUsecase{
-		repo:    repo,
-		hasher:  hasher,
-		encoder: encoder,
-	}
-}
+func InitRoutes(controllers Controllers, c *chi.Mux) {
 
-func (uc *UserUsecase) Save(userDto dto.UserInsertDto) error {
-	user := entity.NewUser(userDto.Name, userDto.Type, userDto.Document, userDto.AvatarURL, userDto.Email, userDto.Phone, userDto.Pass, userDto.City, userDto.State, userDto.BirthDate)
-	hashedPass, err := uc.hasher.Hash(user.Pass)
+	c.Route("/api", func(r chi.Router) {
+		r.Use(middleware.AllowContentType("application/json"))
 
-	if err != nil {
-		fmt.Println(fmt.Errorf("#UserUsecase.Hash error: %w", err))
-		return err
-	}
+			})
 
-	user.Pass = hashedPass
+			private.Route("/ongs", func(r chi.Router) {
+				r.Post("/", controllers.OngController.Insert)
+				r.Get("/", controllers.OngController.List)
+				r.Get("/{ongID}", controllers.OngController.FindByID)
+				r.Patch("/{ongID}", controllers.OngController.Update)
+			})
 
-	err = uc.repo.Save(user)
+			private.Route("/user", func(r chi.Router) {
+				r.Get("/{id}/my-pets", controllers.PetController.ListUserPets)
+				r.Patch("/{id}", controllers.UserController.Update)
+				r.Get("/{id}", controllers.UserController.FindByID)
+				r.Delete("/{id}", controllers.UserController.Delete)
+			})
+			private.Route("/settings", func(r chi.Router) {
+				r.Patch("/push-notifications", controllers.UserController.UpdatePushNotificationSettings)
+			})
+		})
 
-	if err != nil {
-		fmt.Println(fmt.Errorf("#UserUsecase.Save error: %w", err))
-		return err
-	}
+		r.Group(func(public chi.Router) {
+			public.Post("/user", controllers.UserController.Insert)
+			public.Post("/user/token", controllers.UserController.GenerateToken)
+			public.Get("/pets/", controllers.PetController.ListAllPets)
+		})
 
-	err = uc.repo.SaveAddress(&user.Adresses)
-
-	if err != nil {
-		fmt.Println(fmt.Errorf("#UserUsecase.SaveAddress error: %w", err))
-		return err
-	}
-
-	return nil
-
-}
-
-func (uc *UserUsecase) GenerateToken(loginDto *dto.UserLoginDto) (string, error) {
-	user := uc.repo.FindByEmail(loginDto.Email)
-	if user.Name == "" {
-		return "", errors.New("invalid credentials")
-	}
-	if !uc.hasher.Compare(loginDto.Password, user.Pass) {
-		return "", errors.New("invalid credentials")
-	}
-	token, _ := uc.encoder.NewAccessToken(interfaces.UserClaims{
-		Id:    user.ID.String(),
-		Name:  user.Email,
-		Email: user.Email,
-		StandardClaims: jwt.StandardClaims{
-			ExpiresAt: time.Now().Add(time.Hour).Unix(),
-		},
 	})
-	return token, nil
-}
-
-func (uc *UserUsecase) Update(userID uniqueEntityId.ID, userDto dto.UserUpdateDto) error {
-	user := userDto.ToEntity()
-
-	err := uc.repo.Update(userID, user)
-
-	if err != nil {
-		logger.Error(fmt.Errorf("#UserUsecase.Update error: %w", err))
-		return err
-	}
-
-	return nil
-
 }
