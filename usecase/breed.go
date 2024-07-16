@@ -1,30 +1,50 @@
-package usecase
+package routes
 
 import (
-	"fmt"
-	"pet-dex-backend/v2/entity/dto"
-	"pet-dex-backend/v2/infra/config"
-	"pet-dex-backend/v2/interfaces"
+	"pet-dex-backend/v2/api/controllers"
+	"pet-dex-backend/v2/api/middlewares"
+
+	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
 )
 
-var loggerBreed = config.GetLogger("breed-usecase")
-
-type BreedUseCase struct {
-	repo interfaces.BreedRepository
+type Controllers struct {
+	PetController   *controllers.PetController
+	UserController  *controllers.UserController
+	OngController   *controllers.OngController
+	BreedController *controllers.BreedController
 }
 
-func NewBreedUseCase(repo interfaces.BreedRepository) *BreedUseCase {
-	return &BreedUseCase{
-		repo: repo,
-	}
-}
+func InitRoutes(controllers Controllers, c *chi.Mux) {
 
-func (useCase *BreedUseCase) List() ([]*dto.BreedList, error) {
-	breed, err := useCase.repo.List()
-	if err != nil {
-		loggerBreed.Error("error listing breeds", err)
-		err = fmt.Errorf("error listing breeds: %w", err)
-		return nil, err
-	}
-	return breed, nil
+	c.Route("/api", func(r chi.Router) {
+		r.Use(middleware.AllowContentType("application/json"))
+
+			})
+
+			private.Route("/ongs", func(r chi.Router) {
+				r.Post("/", controllers.OngController.Insert)
+				r.Get("/", controllers.OngController.List)
+				r.Get("/{ongID}", controllers.OngController.FindByID)
+				r.Patch("/{ongID}", controllers.OngController.Update)
+			})
+
+			private.Route("/user", func(r chi.Router) {
+				r.Get("/{id}/my-pets", controllers.PetController.ListUserPets)
+				r.Patch("/{id}", controllers.UserController.Update)
+				r.Get("/{id}", controllers.UserController.FindByID)
+				r.Delete("/{id}", controllers.UserController.Delete)
+			})
+			private.Route("/settings", func(r chi.Router) {
+				r.Patch("/push-notifications", controllers.UserController.UpdatePushNotificationSettings)
+			})
+		})
+
+		r.Group(func(public chi.Router) {
+			public.Post("/user", controllers.UserController.Insert)
+			public.Post("/user/token", controllers.UserController.GenerateToken)
+			public.Get("/pets/", controllers.PetController.ListAllPets)
+		})
+
+	})
 }

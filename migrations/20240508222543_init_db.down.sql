@@ -1,15 +1,50 @@
-drop table if exists addresses cascade;
+package routes
 
-drop table if exists breeds cascade;
+import (
+	"pet-dex-backend/v2/api/controllers"
+	"pet-dex-backend/v2/api/middlewares"
 
-drop table if exists legal_person cascade;
+	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
+)
 
-drop table if exists person cascade;
+type Controllers struct {
+	PetController   *controllers.PetController
+	UserController  *controllers.UserController
+	OngController   *controllers.OngController
+	BreedController *controllers.BreedController
+}
 
-drop table if exists pet_image cascade;
+func InitRoutes(controllers Controllers, c *chi.Mux) {
 
-drop table if exists vaccines cascade;
+	c.Route("/api", func(r chi.Router) {
+		r.Use(middleware.AllowContentType("application/json"))
 
-drop table if exists pets cascade;
+			})
 
-drop table if exists users cascade;
+			private.Route("/ongs", func(r chi.Router) {
+				r.Post("/", controllers.OngController.Insert)
+				r.Get("/", controllers.OngController.List)
+				r.Get("/{ongID}", controllers.OngController.FindByID)
+				r.Patch("/{ongID}", controllers.OngController.Update)
+			})
+
+			private.Route("/user", func(r chi.Router) {
+				r.Get("/{id}/my-pets", controllers.PetController.ListUserPets)
+				r.Patch("/{id}", controllers.UserController.Update)
+				r.Get("/{id}", controllers.UserController.FindByID)
+				r.Delete("/{id}", controllers.UserController.Delete)
+			})
+			private.Route("/settings", func(r chi.Router) {
+				r.Patch("/push-notifications", controllers.UserController.UpdatePushNotificationSettings)
+			})
+		})
+
+		r.Group(func(public chi.Router) {
+			public.Post("/user", controllers.UserController.Insert)
+			public.Post("/user/token", controllers.UserController.GenerateToken)
+			public.Get("/pets/", controllers.PetController.ListAllPets)
+		})
+
+	})
+}

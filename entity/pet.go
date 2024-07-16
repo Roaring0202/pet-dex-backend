@@ -9,13 +9,13 @@ import (
 
 type Pet struct {
 	ID                  uniqueEntityId.ID `json:"id"`
-	UserID              uniqueEntityId.ID `json:"user_id"`
-	BreedID             uniqueEntityId.ID `json:"breed_id"`
+	UserID              uniqueEntityId.ID `json:"user_id" db:"userId"`
+	BreedID             uniqueEntityId.ID `json:"breed_id" db:"breedId"`
 	Name                string            `json:"name"`
 	Size                string            `json:"size"`
 	Weight              float64           `json:"weight"`
 	WeightMeasure       string            `json:"weight_measure"`
-	AdoptionDate        time.Time         `json:"adoption_date"`
+	AdoptionDate        time.Time         `json:"adoption_date" db:"adoptionDate"`
 	Birthdate           time.Time         `json:"birthdate"`
 	Comorbidity         string            `json:"comorbidity"`
 	Tags                string            `json:"tags"`
@@ -52,6 +52,8 @@ func NewPet(userId, breedId uniqueEntityId.ID, size, name string, weight float64
 	return &Pet{
 		ID:           petId,
 		UserID:       userId,
+		BreedID: breedId,
+		Size: size,
 		Name:         name,
 		Weight:       weight,
 		AdoptionDate: *adoptionDate,
@@ -59,7 +61,7 @@ func NewPet(userId, breedId uniqueEntityId.ID, size, name string, weight float64
 	}
 }
 
-func ToEntity(dto *dto.PetUpdateDto) *Pet {
+func PetToEntity(dto *dto.PetUpdateDto) *Pet {
 	vaccines := make([]Vaccines, len(dto.Vaccines))
 	for i, v := range dto.Vaccines {
 		vaccines[i] = Vaccines{

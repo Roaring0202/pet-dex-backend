@@ -1,108 +1,50 @@
-package controllers
+package routes
 
 import (
-	"encoding/json"
-	"fmt"
-	"net/http"
-	"pet-dex-backend/v2/entity/dto"
-	"pet-dex-backend/v2/infra/config"
-	"pet-dex-backend/v2/pkg/uniqueEntityId"
-	"pet-dex-backend/v2/usecase"
+	"pet-dex-backend/v2/api/controllers"
+	"pet-dex-backend/v2/api/middlewares"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
 )
 
-var loggerUserController = config.GetLogger("user-controller")
-
-type UserController struct {
-	uusecase *usecase.UserUsecase
+type Controllers struct {
+	PetController   *controllers.PetController
+	UserController  *controllers.UserController
+	OngController   *controllers.OngController
+	BreedController *controllers.BreedController
 }
 
-func NewUserController(uusecase *usecase.UserUsecase) *UserController {
-	return &UserController{
-		uusecase: uusecase,
-	}
-}
+func InitRoutes(controllers Controllers, c *chi.Mux) {
 
-func (uc *UserController) Insert(w http.ResponseWriter, r *http.Request) {
-	var userDto dto.UserInsertDto
-	err := json.NewDecoder(r.Body).Decode(&userDto)
+	c.Route("/api", func(r chi.Router) {
+		r.Use(middleware.AllowContentType("application/json"))
 
-	if err != nil {
-		fmt.Println(fmt.Errorf("#UserController.Insert error: %w", err))
-		http.Error(w, "Erro ao converter requisição ", http.StatusBadRequest)
-		return
-	}
+			})
 
-	err = userDto.Validate()
+			private.Route("/ongs", func(r chi.Router) {
+				r.Post("/", controllers.OngController.Insert)
+				r.Get("/", controllers.OngController.List)
+				r.Get("/{ongID}", controllers.OngController.FindByID)
+				r.Patch("/{ongID}", controllers.OngController.Update)
+			})
 
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
+			private.Route("/user", func(r chi.Router) {
+				r.Get("/{id}/my-pets", controllers.PetController.ListUserPets)
+				r.Patch("/{id}", controllers.UserController.Update)
+				r.Get("/{id}", controllers.UserController.FindByID)
+				r.Delete("/{id}", controllers.UserController.Delete)
+			})
+			private.Route("/settings", func(r chi.Router) {
+				r.Patch("/push-notifications", controllers.UserController.UpdatePushNotificationSettings)
+			})
+		})
 
-	err = uc.uusecase.Save(userDto)
+		r.Group(func(public chi.Router) {
+			public.Post("/user", controllers.UserController.Insert)
+			public.Post("/user/token", controllers.UserController.GenerateToken)
+			public.Get("/pets/", controllers.PetController.ListAllPets)
+		})
 
-	if err != nil {
-		fmt.Println(fmt.Errorf("#UserController.Save error: %w", err))
-		http.Error(w, "Erro ao salvar usuario", http.StatusInternalServerError)
-		return
-	}
-
-	w.WriteHeader(http.StatusCreated)
-}
-func (uc *UserController) GenerateToken(w http.ResponseWriter, r *http.Request) {
-	var userLoginDto dto.UserLoginDto
-	err := json.NewDecoder(r.Body).Decode(&userLoginDto)
-
-	if err != nil {
-		fmt.Println(fmt.Errorf("#UserController.GenerateToken error: %w", err))
-		http.Error(w, "Erro ao converter requisição ", http.StatusBadRequest)
-		return
-	}
-	err = userLoginDto.Validate()
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	token, err := uc.uusecase.GenerateToken(&userLoginDto)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-	}
-	w.Header().Add("Authorization", token)
-	json.NewEncoder(w).Encode(struct {
-		Token string `json:"token"`
-	}{
-		Token: token,
 	})
-	w.WriteHeader(201)
-}
-
-func (uc *UserController) Update(w http.ResponseWriter, r *http.Request) {
-	IDStr := chi.URLParam(r, "id")
-	ID, err := uniqueEntityId.ParseID(IDStr)
-
-	if err != nil {
-		loggerUserController.Errorf("[#UserController.Update] ID Inválido -> Erro: %v", err)
-		http.Error(w, "ID inválido", http.StatusBadRequest)
-		return
-	}
-
-	var userUpdateDto dto.UserUpdateDto
-	err = json.NewDecoder(r.Body).Decode(&userUpdateDto)
-
-	if err != nil {
-		loggerUserController.Errorf("[#UserController.Update] Erro ao tentar converter o body da requisiçao -> Erro: %v", err)
-		http.Error(w, "Erro ao converter a requisição ", http.StatusBadRequest)
-		return
-	}
-
-	err = uc.uusecase.Update(ID, userUpdateDto)
-
-	if err != nil {
-		loggerUserController.Errorf("[#UserController.Update] Erro ao tentar atualizar o usuário -> Erro: %v", err)
-		http.Error(w, "Erro ao tentar atualizar o usuário ", http.StatusBadRequest)
-		return
-	}
-
 }

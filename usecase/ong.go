@@ -6,6 +6,7 @@ import (
 	"pet-dex-backend/v2/entity/dto"
 	"pet-dex-backend/v2/infra/config"
 	"pet-dex-backend/v2/interfaces"
+	"pet-dex-backend/v2/pkg/uniqueEntityId"
 )
 
 type OngUsecase struct {
@@ -29,7 +30,7 @@ func (o *OngUsecase) Save(ongDto *dto.OngInsertDto) error {
 	hashedPass, err := o.hasher.Hash(ong.User.Pass)
 
 	if err != nil {
-		fmt.Errorf("error on ong usecase: %v", err)
+		o.logger.Error("error on ong usecase: ", err)
 		return err
 	}
 
@@ -52,7 +53,67 @@ func (o *OngUsecase) Save(ongDto *dto.OngInsertDto) error {
 	err = o.repo.Save(ong)
 
 	if err != nil {
-		fmt.Errorf("error on ong Save: %v", err)
+		o.logger.Error("error on ong Save: ", err)
+		return err
+	}
+
+	return nil
+
+}
+
+
+
+func (o *OngUsecase) List(limit, offset int, sortBy, order string) ([]*dto.OngListMapper, error) {
+	ong, err := o.repo.List(limit, offset, sortBy, order)
+
+	if err != nil {
+		err = fmt.Errorf("error listing ongs: %w", err)
+		return nil, err
+	}
+	return ong, nil 
+}
+
+func (c *OngUsecase) FindByID(ID uniqueEntityId.ID) (*entity.Ong, error) {
+
+	ong, err := c.repo.FindByID(ID)
+
+	if err != nil {
+		c.logger.Error("error on ong repository: ", err)
+		err = fmt.Errorf("failed to retrieve ong: %w", err)
+		return nil, err
+	}
+
+	user, err := c.userRepo.FindByID(ong.UserID)
+
+	if err != nil {
+		c.logger.Error("error on ong repository: ", err)
+		err = fmt.Errorf("failed to retrieve ong: %w", err)
+		return nil, err
+	}
+
+	ong.User = *user
+
+	return ong, nil
+}
+
+func (o *OngUsecase) Update(ongId uniqueEntityId.ID, ongDto *dto.OngUpdateDto) error {
+	ongToUpdate := entity.OngToUpdate(*ongDto)
+
+	ong, err := o.repo.FindByID(ongId)
+	if err != nil {
+		o.logger.Error("error on ong usecase: ", err)
+		return err
+	}
+
+	err = o.userRepo.Update(ong.UserID, ongToUpdate.User)
+	if err != nil {
+		o.logger.Error("error on ong usecase: ", err)
+		return err
+	}
+
+	err = o.repo.Update(ongId, *ongToUpdate)
+	if err != nil {
+		o.logger.Error("error on ong usecase: ", err)
 		return err
 	}
 
