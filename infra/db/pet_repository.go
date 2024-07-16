@@ -1,34 +1,50 @@
-package db
+package routes
 
 import (
-	"database/sql"
-	"fmt"
-	"pet-dex-backend/v2/entity"
-	"pet-dex-backend/v2/interfaces"
+	"pet-dex-backend/v2/api/controllers"
+	"pet-dex-backend/v2/api/middlewares"
+
+	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
 )
 
-type PetRepository struct {
-	dbconnection *sql.DB
+type Controllers struct {
+	PetController   *controllers.PetController
+	UserController  *controllers.UserController
+	OngController   *controllers.OngController
+	BreedController *controllers.BreedController
 }
 
-func NewPetRepository(db *sql.DB) interfaces.PetRepository {
-	return &PetRepository{
-		dbconnection: db,
-	}
-}
+func InitRoutes(controllers Controllers, c *chi.Mux) {
 
-func (pr *PetRepository) Save(entity.Pet) error {
-	return nil
-}
+	c.Route("/api", func(r chi.Router) {
+		r.Use(middleware.AllowContentType("application/json"))
 
-func (pr *PetRepository) FindById(id int) (pet *entity.Pet, err error) {
-	var petToRecive entity.Pet 
-	err = pr.dbconnection.QueryRow("SELECT id, name, localization_ong, pet_details, social_media_ong FROM pet WHERE id = ?", id).Scan(&petToRecive.Id, &petToRecive.Name, &petToRecive.LocalizationOng, &petToRecive.PetDetails, &petToRecive.SocialMediaOng)
-	if err != nil && err != sql.ErrNoRows {
-		err = fmt.Errorf("error finding pet %d: %w", id, err)
-		fmt.Println(err)
-		return nil, err
-	}
-	pet = &petToRecive
-	return
+			})
+
+			private.Route("/ongs", func(r chi.Router) {
+				r.Post("/", controllers.OngController.Insert)
+				r.Get("/", controllers.OngController.List)
+				r.Get("/{ongID}", controllers.OngController.FindByID)
+				r.Patch("/{ongID}", controllers.OngController.Update)
+			})
+
+			private.Route("/user", func(r chi.Router) {
+				r.Get("/{id}/my-pets", controllers.PetController.ListUserPets)
+				r.Patch("/{id}", controllers.UserController.Update)
+				r.Get("/{id}", controllers.UserController.FindByID)
+				r.Delete("/{id}", controllers.UserController.Delete)
+			})
+			private.Route("/settings", func(r chi.Router) {
+				r.Patch("/push-notifications", controllers.UserController.UpdatePushNotificationSettings)
+			})
+		})
+
+		r.Group(func(public chi.Router) {
+			public.Post("/user", controllers.UserController.Insert)
+			public.Post("/user/token", controllers.UserController.GenerateToken)
+			public.Get("/pets/", controllers.PetController.ListAllPets)
+		})
+
+	})
 }

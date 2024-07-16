@@ -1,38 +1,50 @@
-package main
+package routes
 
 import (
-	"fmt"
-	"log"
-	"net/http"
-	petcontroller "pet-dex-backend/v2/api/controllers/pet"
-	"pet-dex-backend/v2/api/routes"
-	"pet-dex-backend/v2/infra/config"
-	"pet-dex-backend/v2/infra/db"
-	"pet-dex-backend/v2/usecase"
+	"pet-dex-backend/v2/api/controllers"
+	"pet-dex-backend/v2/api/middlewares"
+
+	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
 )
 
-func main() {
-	env, err := config.LoadEnv(".")
-	if err != nil {
-		panic(err)
-	}
+type Controllers struct {
+	PetController   *controllers.PetController
+	UserController  *controllers.UserController
+	OngController   *controllers.OngController
+	BreedController *controllers.BreedController
+}
 
-	database := config.InitConfigs()
-	config.RunMigrations(database)
-	dbPetRepo := db.NewPetRepository(database)
+func InitRoutes(controllers Controllers, c *chi.Mux) {
 
-	exampleUseCase := usecase.NewExampleUseCase(dbPetRepo)
-	findPetUseCase := usecase.NewPetUseCase(dbPetRepo)
+	c.Route("/api", func(r chi.Router) {
+		r.Use(middleware.AllowContentType("application/json"))
 
-	exampleController := petcontroller.NewExampleController(exampleUseCase)
-	findPetController := petcontroller.NewFindPetController(findPetUseCase)
+			})
 
-	contrllers := routes.Controllers{
-		FindPetController: findPetController,
-		ExampleController: exampleController,
-	}
-	router := routes.InitializeRouter(contrllers)
+			private.Route("/ongs", func(r chi.Router) {
+				r.Post("/", controllers.OngController.Insert)
+				r.Get("/", controllers.OngController.List)
+				r.Get("/{ongID}", controllers.OngController.FindByID)
+				r.Patch("/{ongID}", controllers.OngController.Update)
+			})
 
-	fmt.Printf("running on port %v \n", env.PORT)
-	log.Fatal(http.ListenAndServe(":"+env.PORT, router))
+			private.Route("/user", func(r chi.Router) {
+				r.Get("/{id}/my-pets", controllers.PetController.ListUserPets)
+				r.Patch("/{id}", controllers.UserController.Update)
+				r.Get("/{id}", controllers.UserController.FindByID)
+				r.Delete("/{id}", controllers.UserController.Delete)
+			})
+			private.Route("/settings", func(r chi.Router) {
+				r.Patch("/push-notifications", controllers.UserController.UpdatePushNotificationSettings)
+			})
+		})
+
+		r.Group(func(public chi.Router) {
+			public.Post("/user", controllers.UserController.Insert)
+			public.Post("/user/token", controllers.UserController.GenerateToken)
+			public.Get("/pets/", controllers.PetController.ListAllPets)
+		})
+
+	})
 }
