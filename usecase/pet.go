@@ -1,32 +1,50 @@
-package usecase
+package routes
 
 import (
-	"fmt"
-	"pet-dex-backend/v2/entity"
-	"pet-dex-backend/v2/interfaces"
+	"pet-dex-backend/v2/api/controllers"
+	"pet-dex-backend/v2/api/middlewares"
+
+	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
 )
 
-type PetUseCase struct {
-	repo interfaces.PetRepository
+type Controllers struct {
+	PetController   *controllers.PetController
+	UserController  *controllers.UserController
+	OngController   *controllers.OngController
+	BreedController *controllers.BreedController
 }
 
-func NewPetUseCase(repo interfaces.PetRepository) *PetUseCase {
-	return &PetUseCase{repo: repo}
-}
+func InitRoutes(controllers Controllers, c *chi.Mux) {
 
-func (c *PetUseCase) FindById(id int) (*entity.Pet, error) {
-	pet, err := c.repo.FindById(id)
-	if err != nil {
-		fmt.Printf("failed")
-		return nil, err
-	}
-	return pet, nil
-}
+	c.Route("/api", func(r chi.Router) {
+		r.Use(middleware.AllowContentType("application/json"))
 
-func (c *PetUseCase) FindNoAuthPets() {
-	json, err := c.repo.FindNoAuthPets()
-	if err != nil {
-		fmt.Println(err)
-	}
-	fmt.Println(json)
+			})
+
+			private.Route("/ongs", func(r chi.Router) {
+				r.Post("/", controllers.OngController.Insert)
+				r.Get("/", controllers.OngController.List)
+				r.Get("/{ongID}", controllers.OngController.FindByID)
+				r.Patch("/{ongID}", controllers.OngController.Update)
+			})
+
+			private.Route("/user", func(r chi.Router) {
+				r.Get("/{id}/my-pets", controllers.PetController.ListUserPets)
+				r.Patch("/{id}", controllers.UserController.Update)
+				r.Get("/{id}", controllers.UserController.FindByID)
+				r.Delete("/{id}", controllers.UserController.Delete)
+			})
+			private.Route("/settings", func(r chi.Router) {
+				r.Patch("/push-notifications", controllers.UserController.UpdatePushNotificationSettings)
+			})
+		})
+
+		r.Group(func(public chi.Router) {
+			public.Post("/user", controllers.UserController.Insert)
+			public.Post("/user/token", controllers.UserController.GenerateToken)
+			public.Get("/pets/", controllers.PetController.ListAllPets)
+		})
+
+	})
 }
