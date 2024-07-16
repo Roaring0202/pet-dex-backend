@@ -1,21 +1,12 @@
-# syntax=docker/dockerfile:1
-
 FROM golang:1.21.4 as build
-
-RUN mkdir -p /go/api
-WORKDIR /go/api
-
+WORKDIR /usr/src/app/go/api
 COPY go.mod go.sum ./
-COPY /api ./
 RUN go mod download
+COPY . ./
+RUN CGO_ENABLED=0 GOOS=linux go build -o pet-dex-api ./api/
 
-RUN CGO_ENABLED=0 GOOS=linux go build -o pet-dex-api
-
-FROM alpine:latest
-WORKDIR /
-
-COPY --from=build /go/api/pet-dex-api /
-
-EXPOSE 8080
-
+FROM alpine:3.15.11 as api
+WORKDIR /usr/src/app/go/api
+COPY --from=build /usr/src/app/go/api .
+EXPOSE 3000
 CMD ["./pet-dex-api"]
