@@ -1,219 +1,50 @@
-package db
+package routes
 
 import (
-	"fmt"
-	"pet-dex-backend/v2/entity"
-	"pet-dex-backend/v2/infra/config"
-	"pet-dex-backend/v2/interfaces"
-	"pet-dex-backend/v2/pkg/uniqueEntityId"
-	"time"
+	"pet-dex-backend/v2/api/controllers"
+	"pet-dex-backend/v2/api/middlewares"
 
-	"github.com/jmoiron/sqlx"
+	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
 )
 
-type UserRepository struct {
-	dbconnection *sqlx.DB
-	logger       config.Logger
+type Controllers struct {
+	PetController   *controllers.PetController
+	UserController  *controllers.UserController
+	OngController   *controllers.OngController
+	BreedController *controllers.BreedController
 }
 
-func NewUserRepository(dbconn *sqlx.DB) interfaces.UserRepository {
-	return &UserRepository{
-		dbconnection: dbconn,
-		logger:       *config.GetLogger("ong-repository"),
-	}
-}
+func InitRoutes(controllers Controllers, c *chi.Mux) {
 
-func (ur *UserRepository) Delete(id uniqueEntityId.ID) error {
-	_, err := ur.dbconnection.Exec("UPDATE users SET deleted_at = CURRENT_TIMESTAMP WHERE id = ?", id)
+	c.Route("/api", func(r chi.Router) {
+		r.Use(middleware.AllowContentType("application/json"))
 
-	if err != nil {
-		ur.logger.Error("#UserRepository.Delete error: %w", err)
-		return fmt.Errorf("error on delete user")
-	}
+			})
 
-	return nil
-}
+			private.Route("/ongs", func(r chi.Router) {
+				r.Post("/", controllers.OngController.Insert)
+				r.Get("/", controllers.OngController.List)
+				r.Get("/{ongID}", controllers.OngController.FindByID)
+				r.Patch("/{ongID}", controllers.OngController.Update)
+			})
 
-func (ur *UserRepository) Save(user *entity.User) error {
-	_, err := ur.dbconnection.NamedExec("INSERT INTO users (id, name, type, document, avatarUrl, email, phone, pass) VALUES (:id, :name, :type, :document, :avatarUrl, :email, :phone, :pass)", &user)
+			private.Route("/user", func(r chi.Router) {
+				r.Get("/{id}/my-pets", controllers.PetController.ListUserPets)
+				r.Patch("/{id}", controllers.UserController.Update)
+				r.Get("/{id}", controllers.UserController.FindByID)
+				r.Delete("/{id}", controllers.UserController.Delete)
+			})
+			private.Route("/settings", func(r chi.Router) {
+				r.Patch("/push-notifications", controllers.UserController.UpdatePushNotificationSettings)
+			})
+		})
 
-	if err != nil {
-		ur.logger.Error("error saving user: ", err)
-		return err
-	}
+		r.Group(func(public chi.Router) {
+			public.Post("/user", controllers.UserController.Insert)
+			public.Post("/user/token", controllers.UserController.GenerateToken)
+			public.Get("/pets/", controllers.PetController.ListAllPets)
+		})
 
-	return nil
-}
-
-func (ur *UserRepository) SaveAddress(addr *entity.Address) error {
-	_, err := ur.dbconnection.NamedExec("INSERT INTO addresses (id, userId, address, city, state, latitude, longitude) VALUES (:id, :userId, :address, :city, :state, :latitude, :longitude)", &addr)
-
-	if err != nil {
-		ur.logger.Error("error saving address: ", err)
-		return err
-	}
-
-	return nil
-}
-
-func (ur *UserRepository) FindAddressByUserID(userID uniqueEntityId.ID) (*entity.Address, error) {
-	var address entity.Address
-
-	err := ur.dbconnection.Get(&address,
-		`SELECT
-		a.id,
-		a.address,
-		a.city,
-		a.state,
-		a.latitude,
-		a.longitude,
-	FROM
-		addresses a
-	WHERE
-		a.userId = ?`,
-		userID,
-	)
-	if err != nil {
-		ur.logger.Error("error retrieving address: ", err)
-		err = fmt.Errorf("error retrieving address %d: %w", userID, err)
-		return nil, err
-	}
-
-	return &address, nil
-}
-
-func (ur *UserRepository) Update(userID uniqueEntityId.ID, userToUpdate entity.User) error {
-
-	query := "UPDATE users SET"
-	values := []interface{}{}
-
-	if userToUpdate.Name != "" {
-		query = query + " name =?,"
-		values = append(values, userToUpdate.Name)
-	}
-
-	if userToUpdate.Document != "" {
-		query = query + " document =?,"
-		values = append(values, userToUpdate.Document)
-	}
-
-	if userToUpdate.AvatarURL != "" {
-		query = query + " avatarUrl =?,"
-		values = append(values, userToUpdate.AvatarURL)
-	}
-
-	if userToUpdate.Email != "" {
-		query = query + " email =?,"
-		values = append(values, userToUpdate.Email)
-	}
-
-	if userToUpdate.Phone != "" {
-		query = query + " phone =?,"
-		values = append(values, userToUpdate.Phone)
-	}
-
-	if userToUpdate.BirthDate != nil {
-		query = query + " birthdate =?,"
-		values = append(values, userToUpdate.BirthDate)
-	}
-
-	query = query + " updated_at =?,"
-	values = append(values, time.Now())
-
-	n := len(query)
-	query = query[:n-1] + " WHERE id =?"
-	values = append(values, userID)
-
-	fmt.Printf("Query to update: %s", query)
-
-	_, err := ur.dbconnection.Exec(query, values...)
-
-	if err != nil {
-		ur.logger.Error(fmt.Errorf("#UserRepository.Update error: %w", err))
-		return fmt.Errorf("error on update user")
-	}
-
-	return nil
-}
-
-func (ur *UserRepository) FindByID(ID uniqueEntityId.ID) (*entity.User, error) {
-	var user entity.User
-
-	err := ur.dbconnection.Get(&user,
-		`SELECT
-		u.id,
-		u.name,
-		u.birthdate,
-		u.document,
-		u.avatarUrl,
-		u.email,
-		u.phone,
-		u.pass
-	FROM
-		users u
-	WHERE
-		u.id = ?`,
-		ID,
-	)
-	if err != nil {
-		ur.logger.Error("error retrieving user: ", err)
-		err = fmt.Errorf("error retrieving user %d: %w", ID, err)
-		return nil, err
-	}
-
-	return &user, nil
-}
-
-func (ur *UserRepository) FindByEmail(email string) (*entity.User, error) {
-	var user entity.User
-
-	err := ur.dbconnection.Get(&user,
-		`SELECT
-		u.id,
-		u.name,
-		u.email,
-		u.pass
-	FROM
-		users u
-	WHERE
-		u.email = ?`,
-		email,
-	)
-	if err != nil {
-		ur.logger.Error("error retrieving user: ", err)
-		err = fmt.Errorf("error retrieving user %s: %w", email, err)
-		return nil, err
-	}
-
-	return &user, nil
-}
-
-func (ur *UserRepository) List() (users []entity.User, err error) {
-	return nil, nil
-}
-
-func (ur *UserRepository) ChangePassword(userId uniqueEntityId.ID, newPassword string) error {
-
-	query := "UPDATE users SET pass = ?,"
-	var values []interface{}
-
-	values = append(values, newPassword)
-
-	query = query + " updated_at =?,"
-	values = append(values, time.Now())
-
-	n := len(query)
-	query = query[:n-1] + " WHERE id =?"
-	values = append(values, userId)
-
-	fmt.Printf("Query to update: %s", query)
-
-	_, err := ur.dbconnection.Exec(query, values...)
-
-	if err != nil {
-		ur.logger.Error(fmt.Errorf("#UserRepository.ChangePassword error: %w", err))
-		return fmt.Errorf("error on changing user password")
-	}
-
-	return nil
+	})
 }

@@ -20,16 +20,6 @@ func InitRoutes(controllers Controllers, c *chi.Mux) {
 	c.Route("/api", func(r chi.Router) {
 		r.Use(middleware.AllowContentType("application/json"))
 
-		r.Group(func(private chi.Router) {
-			private.Use(middlewares.AuthMiddleware)
-
-			private.Route("/pets", func(r chi.Router) {
-				r.Route("/breeds", func(r chi.Router) {
-					r.Get("/", controllers.BreedController.List)
-				})
-
-				r.Patch("/{petID}", controllers.PetController.Update)
-				r.Post("/", controllers.PetController.CreatePet)
 			})
 
 			private.Route("/ongs", func(r chi.Router) {
@@ -41,11 +31,12 @@ func InitRoutes(controllers Controllers, c *chi.Mux) {
 
 			private.Route("/user", func(r chi.Router) {
 				r.Get("/{id}/my-pets", controllers.PetController.ListUserPets)
-				r.Post("/change-password", controllers.UserController.ChangePassword)
 				r.Patch("/{id}", controllers.UserController.Update)
 				r.Get("/{id}", controllers.UserController.FindByID)
 				r.Delete("/{id}", controllers.UserController.Delete)
-
+			})
+			private.Route("/settings", func(r chi.Router) {
+				r.Patch("/push-notifications", controllers.UserController.UpdatePushNotificationSettings)
 			})
 		})
 
@@ -54,5 +45,6 @@ func InitRoutes(controllers Controllers, c *chi.Mux) {
 			public.Post("/user/token", controllers.UserController.GenerateToken)
 			public.Get("/pets/", controllers.PetController.ListAllPets)
 		})
+
 	})
 }

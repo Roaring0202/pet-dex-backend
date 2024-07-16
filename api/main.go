@@ -1,57 +1,50 @@
-package main
+package routes
 
 import (
-	"fmt"
-	"log"
-	"net/http"
 	"pet-dex-backend/v2/api/controllers"
-	"pet-dex-backend/v2/api/routes"
-	"pet-dex-backend/v2/infra/config"
-	"pet-dex-backend/v2/infra/db"
-	"pet-dex-backend/v2/pkg/encoder"
-	"pet-dex-backend/v2/pkg/hasher"
-	"pet-dex-backend/v2/usecase"
+	"pet-dex-backend/v2/api/middlewares"
 
-	"github.com/jmoiron/sqlx"
+	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
 )
 
-func main() {
-	env, err := config.LoadEnv(".")
-	if err != nil {
-		panic(err)
-	}
+type Controllers struct {
+	PetController   *controllers.PetController
+	UserController  *controllers.UserController
+	OngController   *controllers.OngController
+	BreedController *controllers.BreedController
+}
 
-	config.InitConfigs()
-	sqlxDb, err := sqlx.Open("mysql", env.DBUrl)
+func InitRoutes(controllers Controllers, c *chi.Mux) {
 
-	if err != nil {
-		panic(err)
-	}
+	c.Route("/api", func(r chi.Router) {
+		r.Use(middleware.AllowContentType("application/json"))
 
-	dbPetRepo := db.NewPetRepository(sqlxDb)
-	dbUserRepo := db.NewUserRepository(sqlxDb)
-	dbOngRepo := db.NewOngRepository(sqlxDb)
-	hash := hasher.NewHasher()
-	bdBreedRepo := db.NewBreedRepository(sqlxDb)
+			})
 
-	encoder := encoder.NewEncoderAdapter(config.GetEnvConfig().JWT_SECRET)
+			private.Route("/ongs", func(r chi.Router) {
+				r.Post("/", controllers.OngController.Insert)
+				r.Get("/", controllers.OngController.List)
+				r.Get("/{ongID}", controllers.OngController.FindByID)
+				r.Patch("/{ongID}", controllers.OngController.Update)
+			})
 
-	breedUsecase := usecase.NewBreedUseCase(bdBreedRepo)
-	uusercase := usecase.NewUserUsecase(dbUserRepo, hash, encoder)
-	petUsecase := usecase.NewPetUseCase(dbPetRepo)
-	ongUsecase := usecase.NewOngUseCase(dbOngRepo, dbUserRepo, hash)
-	breedController := controllers.NewBreedController(breedUsecase)
-	petController := controllers.NewPetController(petUsecase)
-	userController := controllers.NewUserController(uusercase)
-	ongController := controllers.NewOngcontroller(ongUsecase)
-	controllers := routes.Controllers{
-		PetController:   petController,
-		UserController:  userController,
-		BreedController: breedController,
-		OngController:   ongController,
-	}
-	router := routes.InitializeRouter(controllers)
+			private.Route("/user", func(r chi.Router) {
+				r.Get("/{id}/my-pets", controllers.PetController.ListUserPets)
+				r.Patch("/{id}", controllers.UserController.Update)
+				r.Get("/{id}", controllers.UserController.FindByID)
+				r.Delete("/{id}", controllers.UserController.Delete)
+			})
+			private.Route("/settings", func(r chi.Router) {
+				r.Patch("/push-notifications", controllers.UserController.UpdatePushNotificationSettings)
+			})
+		})
 
-	fmt.Printf("running on port %v \n", env.PORT)
-	log.Fatal(http.ListenAndServe(":"+env.PORT, router))
+		r.Group(func(public chi.Router) {
+			public.Post("/user", controllers.UserController.Insert)
+			public.Post("/user/token", controllers.UserController.GenerateToken)
+			public.Get("/pets/", controllers.PetController.ListAllPets)
+		})
+
+	})
 }
