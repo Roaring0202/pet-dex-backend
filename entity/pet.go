@@ -1,93 +1,50 @@
-package entity
+package routes
 
 import (
-	"time"
+	"pet-dex-backend/v2/api/controllers"
+	"pet-dex-backend/v2/api/middlewares"
 
-	"pet-dex-backend/v2/entity/dto"
-	"pet-dex-backend/v2/pkg/uniqueEntityId"
+	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
 )
 
-type Pet struct {
-	ID                  uniqueEntityId.ID `json:"id"`
-	UserID              uniqueEntityId.ID `json:"user_id" db:"userId"`
-	BreedID             uniqueEntityId.ID `json:"breed_id" db:"breedId"`
-	Name                string            `json:"name"`
-	Size                string            `json:"size"`
-	Weight              float64           `json:"weight"`
-	WeightMeasure       string            `json:"weight_measure"`
-	AdoptionDate        time.Time         `json:"adoption_date" db:"adoptionDate"`
-	Birthdate           time.Time         `json:"birthdate"`
-	Comorbidity         string            `json:"comorbidity"`
-	Tags                string            `json:"tags"`
-	Castrated           *bool             `json:"castrated"`
-	AvailableToAdoption *bool             `json:"available_to_adoption"`
-	BreedName           string            `json:"breed_name"`
-	ImageUrl            string            `json:"image_url"`
-	Vaccines            []Vaccines        `json:"vaccines"`
-	NeedSpecialCare     SpecialCare       `json:"special_care"`
+type Controllers struct {
+	PetController   *controllers.PetController
+	UserController  *controllers.UserController
+	OngController   *controllers.OngController
+	BreedController *controllers.BreedController
 }
 
-type Vaccines struct {
-	ID        uniqueEntityId.ID `json:"id"`
-	PetID     uniqueEntityId.ID `json:"pet_id"`
-	Name      string            `json:"name"`
-	Date      time.Time         `json:"date"`
-	DoctorCRM string            `json:"doctor_crm"`
-}
+func InitRoutes(controllers Controllers, c *chi.Mux) {
 
-type SpecialCare struct {
-	Needed      *bool  `json:"needed"`
-	Description string `json:"description"`
-}
+	c.Route("/api", func(r chi.Router) {
+		r.Use(middleware.AllowContentType("application/json"))
 
-type PetDetails struct {
-	Breed string
-	Age   int
-	Size  string
-}
+			})
 
-func NewPet(userId, breedId uniqueEntityId.ID, size, name string, weight float64, adoptionDate, birthdate *time.Time) *Pet {
-	petId := uniqueEntityId.NewID()
+			private.Route("/ongs", func(r chi.Router) {
+				r.Post("/", controllers.OngController.Insert)
+				r.Get("/", controllers.OngController.List)
+				r.Get("/{ongID}", controllers.OngController.FindByID)
+				r.Patch("/{ongID}", controllers.OngController.Update)
+			})
 
-	return &Pet{
-		ID:           petId,
-		UserID:       userId,
-		BreedID: breedId,
-		Size: size,
-		Name:         name,
-		Weight:       weight,
-		AdoptionDate: *adoptionDate,
-		Birthdate:    *birthdate,
-	}
-}
+			private.Route("/user", func(r chi.Router) {
+				r.Get("/{id}/my-pets", controllers.PetController.ListUserPets)
+				r.Patch("/{id}", controllers.UserController.Update)
+				r.Get("/{id}", controllers.UserController.FindByID)
+				r.Delete("/{id}", controllers.UserController.Delete)
+			})
+			private.Route("/settings", func(r chi.Router) {
+				r.Patch("/push-notifications", controllers.UserController.UpdatePushNotificationSettings)
+			})
+		})
 
-func PetToEntity(dto *dto.PetUpdateDto) *Pet {
-	vaccines := make([]Vaccines, len(dto.Vaccines))
-	for i, v := range dto.Vaccines {
-		vaccines[i] = Vaccines{
-			Name:      v.Name,
-			Date:      v.Date,
-			DoctorCRM: v.DoctorCRM,
-		}
-	}
-	specialCare := SpecialCare{
-		Needed:      dto.NeedSpecialCare.Needed,
-		Description: dto.NeedSpecialCare.Description,
-	}
+		r.Group(func(public chi.Router) {
+			public.Post("/user", controllers.UserController.Insert)
+			public.Post("/user/token", controllers.UserController.GenerateToken)
+			public.Get("/pets/", controllers.PetController.ListAllPets)
+		})
 
-	return &Pet{
-		Name:                dto.Name,
-		Size:                dto.Size,
-		Weight:              dto.Weight,
-		WeightMeasure:       dto.WeightMeasure,
-		AdoptionDate:        dto.AdoptionDate,
-		Birthdate:           dto.Birthdate,
-		Comorbidity:         dto.Comorbidity,
-		Tags:                dto.Tags,
-		Castrated:           dto.Castrated,
-		AvailableToAdoption: dto.AvailableToAdoption,
-		BreedID:             dto.BreedID,
-		Vaccines:            vaccines,
-		NeedSpecialCare:     specialCare,
-	}
+	})
 }

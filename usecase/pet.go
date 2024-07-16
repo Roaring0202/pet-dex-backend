@@ -1,135 +1,50 @@
-package usecase
+package routes
 
 import (
-	"errors"
-	"fmt"
-	"pet-dex-backend/v2/entity"
-	"pet-dex-backend/v2/entity/dto"
-	"pet-dex-backend/v2/infra/config"
-	"pet-dex-backend/v2/interfaces"
-	"pet-dex-backend/v2/pkg/uniqueEntityId"
+	"pet-dex-backend/v2/api/controllers"
+	"pet-dex-backend/v2/api/middlewares"
 
-	"github.com/google/uuid"
+	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
 )
 
-var loggerUpdate = config.GetLogger("update-usecase")
-
-type PetUseCase struct {
-	repo interfaces.PetRepository
+type Controllers struct {
+	PetController   *controllers.PetController
+	UserController  *controllers.UserController
+	OngController   *controllers.OngController
+	BreedController *controllers.BreedController
 }
 
-func NewPetUseCase(repo interfaces.PetRepository) *PetUseCase {
-	return &PetUseCase{repo: repo}
-}
+func InitRoutes(controllers Controllers, c *chi.Mux) {
 
-func (c *PetUseCase) FindByID(ID uniqueEntityId.ID) (*entity.Pet, error) {
-	pet, err := c.repo.FindByID(ID)
-	if err != nil {
-		err = fmt.Errorf("failed to retrieve pet: %w", err)
-		return nil, err
-	}
-	return pet, nil
-}
+	c.Route("/api", func(r chi.Router) {
+		r.Use(middleware.AllowContentType("application/json"))
 
-func (c *PetUseCase) Update(petID string, userID string, petUpdateDto dto.PetUpdateDto) (err error) {
-	petToUpdate := entity.PetToEntity(&petUpdateDto)
+			})
 
-	if !c.isValidPetSize(petToUpdate) {
-		return errors.New("the animal size is invalid")
-	}
+			private.Route("/ongs", func(r chi.Router) {
+				r.Post("/", controllers.OngController.Insert)
+				r.Get("/", controllers.OngController.List)
+				r.Get("/{ongID}", controllers.OngController.FindByID)
+				r.Patch("/{ongID}", controllers.OngController.Update)
+			})
 
-	if !c.isValidSpecialCare(petToUpdate) {
-		return errors.New("failed to update special care")
-	}
+			private.Route("/user", func(r chi.Router) {
+				r.Get("/{id}/my-pets", controllers.PetController.ListUserPets)
+				r.Patch("/{id}", controllers.UserController.Update)
+				r.Get("/{id}", controllers.UserController.FindByID)
+				r.Delete("/{id}", controllers.UserController.Delete)
+			})
+			private.Route("/settings", func(r chi.Router) {
+				r.Patch("/push-notifications", controllers.UserController.UpdatePushNotificationSettings)
+			})
+		})
 
-	if !c.isValidWeight(petToUpdate) {
-		return errors.New("the animal weight is invalid")
-	}
+		r.Group(func(public chi.Router) {
+			public.Post("/user", controllers.UserController.Insert)
+			public.Post("/user/token", controllers.UserController.GenerateToken)
+			public.Get("/pets/", controllers.PetController.ListAllPets)
+		})
 
-	err = c.repo.Update(petID, userID, petToUpdate)
-	if err != nil {
-		loggerUpdate.Error("error updating pet", err)
-		return fmt.Errorf("failed to update pet with ID %s: %w", petID, err)
-	}
-
-	return nil
-}
-
-func (c *PetUseCase) isValidPetSize(petToUpdate *entity.Pet) bool {
-	return (petToUpdate.Size == "small" || petToUpdate.Size == "medium" || petToUpdate.Size == "large" || petToUpdate.Size == "giant")
-}
-
-func (c *PetUseCase) isValidWeight(petToUpdate *entity.Pet) bool {
-	return (petToUpdate.Weight > 0 &&
-		(petToUpdate.WeightMeasure == "kg" || petToUpdate.WeightMeasure == "lb"))
-}
-
-func (c *PetUseCase) ListUserPets(userID uniqueEntityId.ID) ([]*entity.Pet, error) {
-	pets, err := c.repo.ListByUser(userID)
-	if err != nil {
-		err = fmt.Errorf("failed to retrieve all user pets: %w", err)
-		return nil, err
-	}
-	return pets, nil
-}
-
-func (c *PetUseCase) ListPetsByPage(page int, isUnauthorized bool) ([]*entity.Pet, error) {
-	if isUnauthorized {
-		return c.listPetsUnauthenticated()
-	}
-	return c.listPetsAuthenticated(page)
-}
-
-func (c *PetUseCase) listPetsAuthenticated(page int) ([]*entity.Pet, error) {
-	pets, err := c.repo.ListAllByPage(page)
-	if err != nil {
-		err = fmt.Errorf("failed to retrieve pets page: %w", err)
-		return nil, err
-	}
-	return pets, nil
-}
-
-func (c *PetUseCase) listPetsUnauthenticated() ([]*entity.Pet, error) {
-	pets, err := c.repo.ListAllByPage(1)
-	if len(pets) > 6 {
-		pets = pets[:6]
-	}
-
-	for i, pet := range pets {
-		tempPet := pet
-		pet.ID = uuid.Nil
-		pets[i] = tempPet
-	}
-
-	if err != nil {
-		err = fmt.Errorf("failed to retrieve all user pets: %w", err)
-		return nil, err
-	}
-	return pets, nil
-}
-
-func (c *PetUseCase) isValidSpecialCare(petToUpdate *entity.Pet) bool {
-	var needed = petToUpdate.NeedSpecialCare.Needed
-	var description = petToUpdate.NeedSpecialCare.Description
-
-	if needed != nil {
-		if *needed {
-			return description != ""
-		}
-		if !*needed {
-			return description == ""
-		}
-	}
-	return true
-}
-
-func (c *PetUseCase) Save(petDto dto.PetInsertDto) error {
-	pet := entity.NewPet(petDto.UserID, petDto.BreedID, petDto.Size, petDto.Name, petDto.Weight, petDto.AdoptionDate, petDto.Birthdate)
-
-	err := c.repo.Save(pet)
-	if err != nil {
-		err = fmt.Errorf("failed to save pet: %w", err)
-		return err
-	}
-	return nil
+	})
 }
